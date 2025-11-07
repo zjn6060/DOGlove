@@ -115,6 +115,16 @@ def main():
     except KeyboardInterrupt:
         print("Program interrupted by user")
 
+    except KeyboardInterrupt:
+        print("Program interrupted by user")
+
+    finally:
+        receiver.stop()
+        print("UDP receiver stopped successfully")
+
+if __name__ == '__main__':
+    main()
+
     finally:
         receiver.stop()
         print("UDP receiver stopped successfully")
