@@ -1,5 +1,3 @@
-#A new fork from Jianai Zhao
-
 # <a href="https://do-glove.github.io/">DOGlove: Dexterous Manipulation with a Low-Cost Open-Source Haptic Force Feedback Glove</a>
 
 **Robotics: Science and Systems (RSS) 2025**

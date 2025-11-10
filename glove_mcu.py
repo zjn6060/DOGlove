@@ -21,46 +21,52 @@ block_size = 76  # Total size including header, data, and CRC
 udp_ip = "127.0.0.1"  # Localhost IP
 udp_port = 5009  # Port for joint data
 udp_port_servo = 5010  # Port for servo data
-# udp_port_lra = 5012  # Port for LRA data
+udp_port_lra = 5012  # Port for LRA data
 
 class UARTReader:
+    # 初始化UART读取器
     def __init__(self):
         self.buffer = bytearray()
         self.running = True
         self.serial_port = serial.Serial(uart_port, baud_rate, timeout=1)
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # self.sock.bind((udp_ip, udp_port_lra))
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind((udp_ip, udp_port_lra))
+        self.most_recent_kp = None
         self.write_fps = 30
-
+    # 从UART读取数据
     def read_from_uart(self):
         while self.running:
             # print("Reading from UART...")
-            data = self.serial_port.read(self.serial_port.in_waiting or 1)
+            data = self.serial_port.read(self.serial_port.in_waiting or 1) 
             if data:
                 self.buffer.extend(data)
                 self.process_buffer()
             else:
                 print("No data received from UART")
-
+    # 处理缓冲区数据，找到两个头之间的数据块进行处理
     def process_buffer(self):
         while len(self.buffer) >= block_size: # Check if the buffer has enough data to process
             # Find the start index of the first header
             start_index = self.buffer.find(header)
 
             # No header found, clear the buffer if it's longer than the block size
+            # 判断是否找不到头，start_index = -1 is true, 代表找不到头
             if start_index == -1:
                 print("No header found. Check the alignment of the data.")
 
                 # If no header is found, clear the buffer if it's longer than the block size
                 if len(self.buffer) > block_size:
                     print(f"Discarded data: {self.buffer[:block_size].hex()}")
+                    # 负索引, 保留最后 block_size 个字节, 等待数据补齐
                     self.buffer = self.buffer[-block_size:]
                 break
 
             # Header found at the beginning of the buffer
+            # 判断头在缓冲区的开头
             elif start_index == 0:
                 # Now find the next header
+                # 寻找下一个头，从4之后开始
                 next_header_index = self.buffer.find(header, len(header))
                 if next_header_index == -1:
                     # If no header is found, break and wait for more data
@@ -79,31 +85,41 @@ class UARTReader:
                     self.buffer = self.buffer[next_header_index:]
             
             # Header found in the middle of the buffer, discard the data before the header
+            # start_index > 0 is true, 代表头在缓冲区中间具体的某个位置
             else:
                 print(f"Discarded data: {self.buffer[:start_index].hex()}")
                 self.buffer = self.buffer[start_index:]
 
     def process_block(self, block):
         # Unpack the block (skip the header)
+        # <小端序，I无符号32位整数，16个i有符号32位整数，I无符号32位整数
+        # struct格式里，int占4字节，uint占4字节，跳过帧头后，共72字节
         data = struct.unpack("<I16iI", block[4:]) # uint32_t reference, 16 int32_t values, uint32_t CRC
 
         # Extract the 16 int32_t values and CRC
+        # 第一个数字是参考电压
         reference_voltage = data[0]
+        # 第二到最后一个数字之前是传感器数据
         data_values = data[1:-1]
+        # 最后一个数字是CRC，Cyclic Redundancy Check，循环冗余校验
         crc = data[-1]
 
-        # Convert data_values to voltages
+        # Convert data_values to voltages，归一化到0-5V
         voltages = [(float(val) * 5.0 / 0x7FFFFF) for val in data_values]
 
         # Split CRC into checksum and timestamp
+        # 校验和时间戳各16位
         checksum = (crc >> 16) & 0xFFFF
         timestamp = crc & 0xFFFF
 
         # Calculate the expected checksum (16-bit sum of data_values)
+        # 校验和是前面所有数据的和的低16位
         expected_checksum = sum(data[:-1]) & 0xFFFF
 
         # Calculate the joint angles
+        # 将微伏转化为伏特
         reference_voltage = reference_voltage/1000000 # Convert to volts
+        # 计算关节角度，假设参考电压对应360度
         joint_angles = [val/reference_voltage*360 for val in voltages if reference_voltage != 0]
 
         print(f"Voltages: {[round(val, 2) for val in voltages]}")
@@ -118,65 +134,66 @@ class UARTReader:
         format_string = "f" * len(joint_angles)
         # Pack all the values in the list
         message = struct.pack(format_string, *joint_angles)
+        # 将message通过UDP发送到指定IP和端口
         self.udp_socket.sendto(message, (udp_ip, udp_port))
     
-    # def lra_control(self, channel, wave, duration):
-    #     """send_data = 0x55, 0xAA, channel(0-4), wave, duration_h, duration_l, checksum"""
-    #     if channel not in range(5):
-    #         print("Invalid channel. Please choose a channel between 0-4.")
-    #         return
-    #     if wave not in range(256):
-    #         print("Invalid wave. Please choose a wave between 0-255.")
-    #         return
-    #     if duration not in range(65536):
-    #         print("Invalid duration. Please choose a duration between 0-65535.")
-    #         return
-    #     duration_H = (duration >> 8) & 0xFF
-    #     duration_L = duration & 0xFF
-    #     checksum = (channel + wave + duration_H + duration_L) & 0xFF
-    #     send_data = [0x55, 0xAA, channel, wave, duration_H, duration_L, checksum]
-    #     # print(f"send data: {bytes(send_data).hex()}")
-    #     self.serial_port.write(bytes(send_data))
+    def lra_control(self, channel, wave, duration):
+        """send_data = 0x55, 0xAA, channel(0-4), wave, duration_h, duration_l, checksum"""
+        if channel not in range(5):
+            print("Invalid channel. Please choose a channel between 0-4.")
+            return
+        if wave not in range(256):
+            print("Invalid wave. Please choose a wave between 0-255.")
+            return
+        if duration not in range(65536):
+            print("Invalid duration. Please choose a duration between 0-65535.")
+            return
+        duration_H = (duration >> 8) & 0xFF
+        duration_L = duration & 0xFF
+        checksum = (channel + wave + duration_H + duration_L) & 0xFF
+        send_data = [0x55, 0xAA, channel, wave, duration_H, duration_L, checksum]
+        # print(f"send data: {bytes(send_data).hex()}")
+        self.serial_port.write(bytes(send_data))
     
-    # def listen(self):
-    #     print(f"Listening on {udp_ip}:{udp_port_lra}...")
-    #     while self.running:
-    #         data, addr = self.sock.recvfrom(4*4)  # 4 bytes per float, 16 floats
-    #         if data:
-    #             # Unpack the received float
-    #             received_kp = struct.unpack("f"*4, data)
+    def listen(self):
+        print(f"Listening on {udp_ip}:{udp_port_lra}...")
+        while self.running:
+            data, addr = self.sock.recvfrom(4*4)  # 4 bytes per float, 16 floats
+            if data:
+                # Unpack the received float
+                received_kp = struct.unpack("f"*4, data)
 
-    #             # Store the most recent pressure
-    #             self.most_recent_kp = received_kp
+                # Store the most recent pressure
+                self.most_recent_kp = received_kp
 
-    #             # print(f"Received kp (as float): {kp}")
-    #             # print("-" * 40)
+                # print(f"Received kp (as float): {kp}")
+                # print("-" * 40)
 
-    #             # Control the LRA
-    #             k = 100
-    #             # k = 2000
-    #             for i in range(len(received_kp)):
-    #                 if received_kp[i] > 10 and received_kp[i] < k:
-    #                     self.lra_control(i, 56, int(1000/self.write_fps))
-    #                     # self.lra_control(i, 222, int(1000/self.write_fps))
-    #                 else:
-    #                     self.lra_control(i, 222, 100)
-    #             time.sleep(1/self.write_fps)
+                # Control the LRA
+                k = 100
+                # k = 2000
+                for i in range(len(received_kp)):
+                    if received_kp[i] > 10 and received_kp[i] < k:
+                        self.lra_control(i, 56, int(1000/self.write_fps))
+                        # self.lra_control(i, 222, int(1000/self.write_fps))
+                    else:
+                        self.lra_control(i, 222, 100)
+                time.sleep(1/self.write_fps)
 
     def start(self):
         print("UART reader started")
         self.thread = threading.Thread(target=self.read_from_uart)
         self.thread.start()
-        # self.thread_lra = threading.Thread(target=self.listen)
-        # self.thread_lra.start()
+        self.thread_lra = threading.Thread(target=self.listen)
+        self.thread_lra.start()
 
     def stop(self):
         print("Closing UART port...")
         self.running = False
         self.thread.join()
-        # self.thread_lra.join()
+        self.thread_lra.join()
         self.udp_socket.close()
-        # self.sock.close()
+        self.sock.close()
         self.serial_port.close()
         
 
