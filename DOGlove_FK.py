@@ -38,13 +38,16 @@ def find_actuator_for_joint(model, joint_name):
 
 
 def main():
+    # 导入模型
     model = mujoco.MjModel.from_xml_path(_XML.as_posix())
+    # 根据模型创建数据
     data = mujoco.MjData(model)
 
     receiver = UDPReceiver()
     receiver.start()
 
     try:
+        # passive is for visualization only, no interaction
         with mujoco.viewer.launch_passive(
             model=model, data=data) as viewer:
             mujoco.mjv_defaultFreeCamera(model, viewer.cam)
@@ -52,6 +55,7 @@ def main():
             
             rate = RateLimiter(frequency=100.0)
             
+            # Define site and joint names
             site_names = ['index_tip_site', 'middle_tip_site', 'ring_tip_site', 'little_tip_site', 'thumb_tip_site']
             
             joint_names = ['thumb_bend_1', 'thumb_bend_2', 'thumb_split', 'thumb_mcp', 
@@ -61,11 +65,14 @@ def main():
                            'pinky_bend_1', 'pinky_bend_2', 'pinky_split',
                            'thumb_bend_3', 'index_bend_3', 'middle_bend_3', 'ring_bend_3', 'pinky_bend_3']
             # Initialize lists to store joint IDs and qpos indices
+            # 创建两个空列表，用于存储关节ID和qpos索引
             joint_ids = []
             qpos_indices = []
 
             for joint_name in joint_names:
+                # 为两个列表添加数据 
                 joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name) # Get joint ID for each joint name
+                # qpos是关节位置的数组，jnt_qposadr存储每个关节在qpos数组中的起始索引
                 qpos_index = model.jnt_qposadr[joint_id] # Get the corresponding qpos index
                 # print(f"Joint Name: {joint_name}, Joint ID: {joint_id}, Qpos index: {qpos_index}")
                 
@@ -78,10 +85,13 @@ def main():
             # increment = 0.1
 
             while viewer.is_running():
+                # Step the simulation
                 mujoco.mj_step(model, data)
                 
                 for name in site_names:
                     site_pos = get_site_pos(model, data, name)
+                    
+                    # 手动调试时使用
                     # print(f"{name}: {site_pos}")
                 
                 # print(f"Qpos: {data.qpos}")
@@ -114,16 +124,6 @@ def main():
 
     except KeyboardInterrupt:
         print("Program interrupted by user")
-
-    except KeyboardInterrupt:
-        print("Program interrupted by user")
-
-    finally:
-        receiver.stop()
-        print("UDP receiver stopped successfully")
-
-if __name__ == '__main__':
-    main()
 
     finally:
         receiver.stop()

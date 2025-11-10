@@ -138,6 +138,7 @@ class UARTReader:
         self.udp_socket.sendto(message, (udp_ip, udp_port))
     
     def lra_control(self, channel, wave, duration):
+        # channel: 0-4, wave: 0-255, duration: 0-65535 ms
         """send_data = 0x55, 0xAA, channel(0-4), wave, duration_h, duration_l, checksum"""
         if channel not in range(5):
             print("Invalid channel. Please choose a channel between 0-4.")
@@ -148,6 +149,7 @@ class UARTReader:
         if duration not in range(65536):
             print("Invalid duration. Please choose a duration between 0-65535.")
             return
+        # 校验和计算
         duration_H = (duration >> 8) & 0xFF
         duration_L = duration & 0xFF
         checksum = (channel + wave + duration_H + duration_L) & 0xFF
@@ -158,7 +160,8 @@ class UARTReader:
     def listen(self):
         print(f"Listening on {udp_ip}:{udp_port_lra}...")
         while self.running:
-            data, addr = self.sock.recvfrom(4*4)  # 4 bytes per float, 16 floats
+            # Receive data from UDP
+            data, addr = self.sock.recvfrom(4*4)  # 4 bytes per float, 4 floats
             if data:
                 # Unpack the received float
                 received_kp = struct.unpack("f"*4, data)
@@ -166,14 +169,17 @@ class UARTReader:
                 # Store the most recent pressure
                 self.most_recent_kp = received_kp
 
-                # print(f"Received kp (as float): {kp}")
-                # print("-" * 40)
+                print(f"Received kp (as float): {kp}")
+                print("-" * 40)
 
                 # Control the LRA
                 k = 100
                 # k = 2000
+                
+                # i is the channel number
                 for i in range(len(received_kp)):
                     if received_kp[i] > 10 and received_kp[i] < k:
+                        # lra_control(self, channel, wave, duration)
                         self.lra_control(i, 56, int(1000/self.write_fps))
                         # self.lra_control(i, 222, int(1000/self.write_fps))
                     else:
@@ -198,6 +204,7 @@ class UARTReader:
         
 
 class UDPReceiver:
+    # 初始化UDP接收器
     def __init__(self):
         self.most_recent_joints = None
         self.most_recent_servo = None
@@ -212,6 +219,7 @@ class UDPReceiver:
     def listen1(self):
         print(f"Listening on {udp_ip}:{udp_port}...")
         while self.running:
+            # 16 floats for joint angles
             data, addr = self.sock1.recvfrom(4*self.length)  # 4 bytes per float, 16 floats
             if data:
                 # Unpack the received float
@@ -228,6 +236,7 @@ class UDPReceiver:
     def listen2(self):
         print(f"Listening on {udp_ip}:{udp_port_servo}...")
         while self.running:     
+            # 5 floats for servo angles
             data, addr = self.sock2.recvfrom(4*5)  # 4 bytes per float, 5 floats
             if data:
                 # Unpack the received float
