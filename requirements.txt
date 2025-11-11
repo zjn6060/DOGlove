@@ -5,3 +5,4 @@ loop-rate-limiters
 mink
 qpsolvers[quadprog]
 pybind11
+mujoco

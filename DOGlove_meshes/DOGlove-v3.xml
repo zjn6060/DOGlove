@@ -79,7 +79,7 @@
           <body name="index_bend_2" pos="0 0.07 0" gravcomp="1">
             <inertial pos="-0.000180675 0.03 -0.000190739" quat="0.706203 0.706203 -0.0357435 0.0357435" mass="0.0132915" diaginertia="6.4192e-06 6.29363e-06 7.34581e-07"/>
             <joint name="index_bend_2" pos="0 0 0" axis="1 0 0" range="-2.61 0" class="finger"/>
-            <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="index_bend_2"/>
+            <geom type="mesh" rgba="1 0.843 0 1" mesh="index_bend_2"/>
             <body name="index_bend_1" pos="0 0.06 0" gravcomp="1">
               <inertial pos="0 0.00880992 0" quat="0.707107 0.707107 0 0" mass="0.0013349" diaginertia="8.22112e-08 7.27871e-08 2.94529e-08"/>
               <joint name="index_bend_1" pos="0 0 0" axis="1 0 0" range="-2.09 0" class="finger"/>
@@ -167,7 +167,7 @@
             <body name="thumb_bend_2" pos="-0.002 0.05 0" gravcomp="1">
               <inertial pos="0.00223918 0.02 0.000862215" quat="0.706246 0.706246 0.0348769 -0.0348769" mass="0.0100405" diaginertia="2.58082e-06 2.47797e-06 5.90239e-07"/>
               <joint name="thumb_bend_2" pos="0 0 0" axis="1 0 0" range="-2.44 0" class="thumb"/>
-              <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="thumb_bend_2"/>
+              <geom type="mesh" rgba="1 0.843 0 1" mesh="thumb_bend_2"/>
               <body name="thumb_bend_1" pos="0.002 0.04 0" gravcomp="1">
                 <inertial pos="0 0.00880992 0" quat="0.707107 0.707107 0 0" mass="0.0013349" diaginertia="8.22112e-08 7.27871e-08 2.94529e-08"/>
                 <joint name="thumb_bend_1" pos="0 0 0" axis="1 0 0" range="-1.83 0" class="thumb"/>
